@@ -1,0 +1,49 @@
+周一:
+  启用: true
+  name: "宋韵云图（四楼）"
+  seat: "35"
+  run_at_hour: 20      # 周一晚上 8 点开始运行脚本
+  book_start_hour: 7   # 预约周三早上 7 点的座位
+  duration: 15         # 持续 15 小时
+周二:
+  启用: true
+  name: "宋韵云图（四楼）"
+  seat: "35"
+  run_at_hour: 20
+  book_start_hour: 7
+  duration: 15
+周三:
+  启用: true
+  name: "宋韵云图（四楼）"
+  seat: "35"
+  run_at_hour: 20
+  book_start_hour: 7
+  duration: 15
+周四:
+  启用: true
+  name: "宋韵云图（四楼）"
+  seat: "35"
+  run_at_hour: 20
+  book_start_hour: 7
+  duration: 15
+周五:
+  启用: true
+  name: "宋韵云图（四楼）"
+  seat: "35"
+  run_at_hour: 20
+  book_start_hour: 7
+  duration: 15
+周六:
+  启用: false
+  name: "二楼西学习空间"
+  seat: "1"
+  run_at_hour: 20
+  book_start_hour: 8
+  duration: 13
+周日:
+  启用: false
+  name: "格物 E 堂（二楼东）"
+  seat: "1"
+  run_at_hour: 20
+  book_start_hour: 8
+  duration: 4
