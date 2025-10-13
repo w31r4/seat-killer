@@ -47,3 +47,10 @@ func Login(user, passwd string) (*http.Client, string, error) {
 	// Return the client (which has the jar) and the specific PHPSESSID.
 	return client.DefaultClient.(*http.Client), phpSessID, nil
 }
+
+// ValidateCredentials attempts to log in to check if the user's credentials are valid.
+// It does not retain the session cookie, making it a pure validation function.
+func ValidateCredentials(user, passwd string) error {
+	_, _, err := Login(user, passwd)
+	return err
+}

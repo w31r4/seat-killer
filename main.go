@@ -30,6 +30,13 @@ func main() {
 	}
 	log.Println("User info loaded.")
 
+	// --- 2. Validate Credentials ---
+	log.Println("Validating user credentials...")
+	if err := sso.ValidateCredentials(userInfo.SchoolID, userInfo.Password); err != nil {
+		log.Fatalf("Credential validation failed: %v. Please check your user_info.yml.", err)
+	}
+	log.Println("User credentials are valid.")
+
 	_, err = mapper.LoadSeatMap("seat_report.txt")
 	if err != nil {
 		log.Fatalf("Failed to load seat map: %v", err)
@@ -42,7 +49,7 @@ func main() {
 	}
 	log.Println("Seat config loaded.")
 
-	// --- 2. Determine Today's Booking Task ---
+	// --- 3. Determine Today's Booking Task ---
 	// The logic is: on the day of `run_at_hour`, we book a seat for two days later.
 	// E.g., on Monday at 20:00, we book a seat for Wednesday.
 	weekdayMap := map[time.Weekday]string{
@@ -64,7 +71,7 @@ func main() {
 	log.Printf("Found booking task for today (%s): Run at %d:00 to book a seat for 2 days later at %d:00.",
 		todayWeekdayStr, dayConfig.RunAtHour, dayConfig.BookStartHour)
 
-	// --- 3. Wait for the booking window ---
+	// --- 4. Wait for the booking window ---
 	now := time.Now()
 	officialBookTime := time.Date(now.Year(), now.Month(), now.Day(), dayConfig.RunAtHour, 0, 0, 0, time.Local)
 	preemptTime := officialBookTime.Add(-preemptMinutes * time.Minute)
@@ -85,7 +92,7 @@ func main() {
 
 	log.Println("Booking window opened. Starting high-frequency requests...")
 
-	// --- 4. High-Frequency Booking Loop ---
+	// --- 5. High-Frequency Booking Loop ---
 	client, _, err := sso.Login(userInfo.SchoolID, userInfo.Password)
 	if err != nil {
 		log.Fatalf("Initial login failed: %v", err)
