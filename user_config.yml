@@ -1,49 +1,61 @@
-周一: # 预约目标：周三
-  启用: true
-  name: "宋韵云图（四楼）"
-  seat: "35"
-  run_at_hour: 20      # 周一晚上 8 点开始运行脚本
-  book_start_hour: 7   # 预约周三早上 7 点的座位
-  duration: 15         # 持续 15 小时
-周二: # 预约目标：周四
-  启用: true
-  name: "宋韵云图（四楼）"
-  seat: "35"
-  run_at_hour: 20
-  book_start_hour: 7
-  duration: 15
-周三: # 预约目标：周五
-  启用: true
-  name: "宋韵云图（四楼）"
-  seat: "35"
-  run_at_hour: 20
-  book_start_hour: 7
-  duration: 15
-周四: # 预约目标：周六
-  启用: true
-  name: "宋韵云图（四楼）"
-  seat: "35"
-  run_at_hour: 20
-  book_start_hour: 7
-  duration: 15
-周五: # 预约目标：周日
-  启用: true
-  name: "宋韵云图（四楼）"
-  seat: "35"
-  run_at_hour: 20
-  book_start_hour: 7
-  duration: 15
-周六: # 预约目标：下周一
-  启用: false
-  name: "二楼西学习空间"
-  seat: "1"
-  run_at_hour: 20
-  book_start_hour: 8
-  duration: 13
-周日: # 预约目标：下周二
-  启用: false
-  name: "格物 E 堂（二楼东）"
-  seat: "1"
-  run_at_hour: 20
-  book_start_hour: 8
-  duration: 4
+# 全局抢座参数
+global:
+  preempt_seconds: 15  # 全局设置：提前 15 秒开始抢座
+
+# 每日抢座计划
+week_config:
+  周一: # 预约目标：周三
+    启用: true
+    run_at_hour: 20           # 脚本在周一晚上 20:00 (8 PM) 左右运行
+    name: "宋韵云图（四楼）"     # 目标房间名称
+    seats: ["35", "36", "37"] # 座位优先级: 35 (最高) > 36 (次高) > 37 (保底)
+    book_start_hour: 7        # 预约周三早上 7 点的座位
+    duration: 15              # 持续 15 小时
+
+  周二: # 预约目标：周四
+    启用: true
+    run_at_hour: 20
+    name: "宋韵云图（四楼）"
+    seats: ["35", "36", "37"]
+    book_start_hour: 7
+    duration: 15
+
+  周三: # 预约目标：周五
+    启用: false
+    run_at_hour: 20
+    name: "未指定"
+    seats: ["1"]
+    book_start_hour: 8
+    duration: 4
+
+  周四: # 预约目标：周六
+    启用: false
+    run_at_hour: 20
+    name: "未指定"
+    seats: ["1"]
+    book_start_hour: 8
+    duration: 4
+
+  周五: # 预约目标：周日
+    启用: false
+    run_at_hour: 20
+    name: "未指定"
+    seats: ["1"]
+    book_start_hour: 8
+    duration: 4
+
+  周六: # 预约目标：下周一
+    启用: false
+    run_at_hour: 20
+    name: "未指定"
+    seats: ["1"]
+    book_start_hour: 8
+    duration: 4
+
+  周日: # 预约目标：下周二
+    启用: false
+    run_at_hour: 20
+    name: "未指定"
+    seats: ["1"]
+    book_start_hour: 8
+    duration: 4

@@ -12,8 +12,6 @@ import (
 )
 
 const (
-	// Start sending requests 1 minute before the official booking time.
-	preemptMinutes = 1
 	// Keep trying for 2 minutes after the official booking time.
 	windowMinutes = 2
 	// Interval between requests.
@@ -26,9 +24,20 @@ func main() {
 	// --- 1. Load Configs & Map ---
 	userInfo, err := config.LoadUserInfo("user_info.yml")
 	if err != nil {
-		log.Fatalf("Failed to load user_info.yml: %v. Please make sure it exists and is correctly formatted.", err)
+		log.Fatalf("Failed to load user_info.yml: %v", err)
 	}
 	log.Println("User info loaded.")
+
+	seatCfg, err := config.LoadSeatConfig("user_config.yml")
+	if err != nil {
+		log.Fatalf("Failed to load user_config.yml: %v", err)
+	}
+	log.Println("Seat config loaded.")
+
+	if _, err = mapper.LoadSeatMap("seat_report.txt"); err != nil {
+		log.Fatalf("Failed to load seat map: %v", err)
+	}
+	log.Println("Seat map loaded.")
 
 	// --- 2. Validate Credentials ---
 	log.Println("Validating user credentials...")
@@ -37,29 +46,11 @@ func main() {
 	}
 	log.Println("User credentials are valid.")
 
-	_, err = mapper.LoadSeatMap("seat_report.txt")
-	if err != nil {
-		log.Fatalf("Failed to load seat map: %v", err)
-	}
-	log.Println("Seat map loaded.")
-
-	seatCfg, err := config.LoadSeatConfig("user_config.yml")
-	if err != nil {
-		log.Fatalf("Failed to load user_config.yml: %v", err)
-	}
-	log.Println("Seat config loaded.")
-
 	// --- 3. Determine Today's Booking Task ---
-	// The logic is: on the day of `run_at_hour`, we book a seat for two days later.
-	// E.g., on Monday at 20:00, we book a seat for Wednesday.
 	weekdayMap := map[time.Weekday]string{
-		time.Sunday:    "周日",
-		time.Monday:    "周一",
-		time.Tuesday:   "周二",
-		time.Wednesday: "周三",
-		time.Thursday:  "周四",
-		time.Friday:    "周五",
-		time.Saturday:  "周六",
+		time.Sunday: "周日", time.Monday: "周一", time.Tuesday: "周二",
+		time.Wednesday: "周三", time.Thursday: "周四", time.Friday: "周五",
+		time.Saturday: "周六",
 	}
 	todayWeekdayStr := weekdayMap[time.Now().Weekday()]
 
@@ -68,24 +59,22 @@ func main() {
 		log.Printf("Booking is not enabled for today (%s). Exiting.", todayWeekdayStr)
 		return
 	}
-	log.Printf("Found booking task for today (%s): Run at %d:00 to book a seat for 2 days later at %d:00.",
-		todayWeekdayStr, dayConfig.RunAtHour, dayConfig.BookStartHour)
+	log.Printf("Found booking task for today (%s): Run at %d:00 to book one of %d seat(s).",
+		todayWeekdayStr, dayConfig.RunAtHour, len(dayConfig.Seats))
 
 	// --- 4. Wait for the booking window ---
 	now := time.Now()
 	officialBookTime := time.Date(now.Year(), now.Month(), now.Day(), dayConfig.RunAtHour, 0, 0, 0, time.Local)
-	preemptTime := officialBookTime.Add(-preemptMinutes * time.Minute)
+	preemptTime := officialBookTime.Add(-time.Duration(seatCfg.Global.PreemptSeconds) * time.Second)
 	windowEndTime := officialBookTime.Add(windowMinutes * time.Minute)
 
 	log.Printf("Official booking time is %s. Will start trying at %s.", officialBookTime.Format("15:04:05"), preemptTime.Format("15:04:05"))
 
 	if now.Before(preemptTime) {
-		waitDuration := preemptTime.Sub(now)
-		log.Printf("Waiting for %v...", waitDuration)
-		time.Sleep(waitDuration)
+		time.Sleep(preemptTime.Sub(now))
 	}
 
-	if now.After(windowEndTime) {
+	if time.Now().After(windowEndTime) {
 		log.Println("Booking window has already passed. Exiting.")
 		return
 	}
@@ -103,16 +92,7 @@ func main() {
 	}
 	log.Printf("Logged in as UID: %s. Ready to book.", loggedInUser.UID)
 
-	seatID, err := mapper.GetSeatID(dayConfig.Name, dayConfig.Seat)
-	if err != nil {
-		log.Fatalf("Could not find seat '%s' in room '%s': %v", dayConfig.Seat, dayConfig.Name, err)
-	}
-
-	// Booking for two days in the future.
 	bookingDay := time.Now().AddDate(0, 0, 2)
-	bookTime := time.Date(bookingDay.Year(), bookingDay.Month(), bookingDay.Day(), dayConfig.BookStartHour, 0, 0, 0, time.Local)
-	duration := time.Duration(dayConfig.Duration) * time.Hour
-
 	ticker := time.NewTicker(requestInterval)
 	defer ticker.Stop()
 
@@ -122,19 +102,32 @@ func main() {
 			break
 		}
 
-		log.Printf("Attempting to book seat %d for %s...", seatID, bookTime.Format("2006-01-02 15:04"))
-		result, err := booker.BookSeat(client, loggedInUser.UID, seatID, bookTime, duration)
-		if err != nil {
-			log.Printf("Booking attempt failed: %v", err)
-			continue // Try again on the next tick
-		}
+		// In each tick, iterate through all seats according to priority.
+		for _, seatNum := range dayConfig.Seats {
+			seatID, err := mapper.GetSeatID(dayConfig.Name, seatNum)
+			if err != nil {
+				log.Printf("Cannot find seat '%s' in room '%s', skipping.", seatNum, dayConfig.Name)
+				continue
+			}
 
-		log.Printf("Booking result: [%s] %s", result.CODE, result.MESSAGE)
-		if result.CODE == "ok" {
-			log.Println("BOOKING SUCCESSFUL! Exiting.")
-			break // Exit loop on success
+			bookTime := time.Date(bookingDay.Year(), bookingDay.Month(), bookingDay.Day(), dayConfig.BookStartHour, 0, 0, 0, time.Local)
+			duration := time.Duration(dayConfig.Duration) * time.Hour
+
+			log.Printf("Attempting to book room '%s', seat '%s' (%d)", dayConfig.Name, seatNum, seatID)
+			result, err := booker.BookSeat(client, loggedInUser.UID, seatID, bookTime, duration)
+			if err != nil {
+				log.Printf("Booking attempt failed: %v", err)
+				continue // Try next seat
+			}
+
+			log.Printf("Booking result: [%s] %s", result.CODE, result.MESSAGE)
+			if result.CODE == "ok" {
+				log.Println("BOOKING SUCCESSFUL! Exiting.")
+				return // Exit main function on success
+			}
+			// If not "ok" (e.g., seat taken), the loop will continue to the next seat.
 		}
 	}
 
-	log.Println("Seat Killer finished.")
+	log.Println("Seat Killer finished: all attempts failed within the window.")
 }

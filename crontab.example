@@ -1,0 +1,41 @@
+# ==============================================================================
+# crontab for seat-killer
+# ==============================================================================
+#
+# HOW TO USE:
+# 1. Open your crontab editor by running: `crontab -e`
+# 2. Copy the content of this file into the editor.
+# 3. IMPORTANT: Modify the paths to match your actual project location.
+# 4. Save and exit the editor.
+#
+# Cron Expression Format:
+# .---------------- minute (0 - 59)
+# |  .------------- hour (0 - 23)
+# |  |  .---------- day of month (1 - 31)
+# |  |  |  .------- month (1 - 12)
+# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7)
+# |  |  |  |  |
+# *  *  *  *  *  command to be executed
+
+# ------------------------------------------------------------------------------
+# EXAMPLE: Run seat-killer for User A every day at 19:55 (7:55 PM)
+#
+# This schedule is designed to run the script a few minutes before the 
+# `run_at_hour` (e.g., 20:00) defined in your user_config.yml.
+# The Go program itself will handle the precise waiting logic.
+#
+# Explanation:
+# - `55 19 * * *`: Run at 19:55 (7:55 PM) every day.
+# - `cd /path/to/your/seat-killer-A`: Change directory to the specific user's project folder. This is CRUCIAL.
+# - `/path/to/your/seat-killer-A/seat-killer-A`: Execute the compiled program.
+# - `>> /path/to/your/seat-killer-A/cron.log 2>&1`: Append all output (stdout and stderr) to a log file.
+#
+55 19 * * * cd /path/to/your/seat-killer-A && ./seat-killer-A >> /path/to/your/seat-killer-A/cron.log 2>&1
+
+# ------------------------------------------------------------------------------
+# EXAMPLE: Run seat-killer for User B at the same time
+#
+# You can add multiple entries for multiple users.
+#
+# 55 19 * * * cd /path/to/your/seat-killer-B && ./seat-killer-B >> /path/to/your/seat-killer-B/cron.log 2>&1
+# ------------------------------------------------------------------------------

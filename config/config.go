@@ -25,18 +25,28 @@ func LoadUserInfo(path string) (*UserInfo, error) {
 	return &userInfo, nil
 }
 
-// --- SeatConfig ---
+// --- SeatConfig (Final Structure) ---
+
+// SeatConfig is the main configuration structure.
 type SeatConfig struct {
-	WeekConfig map[string]DayConfig `yaml:",inline"`
+	Global     GlobalConfig         `yaml:"global"`
+	WeekConfig map[string]DayConfig `yaml:"week_config"`
 }
 
+// GlobalConfig holds settings that apply to all tasks.
+type GlobalConfig struct {
+	PreemptSeconds int `yaml:"preempt_seconds"`
+}
+
+// DayConfig represents the configuration for a specific day of the week.
+// It contains a single task with a prioritized list of seats.
 type DayConfig struct {
-	Enable        bool   `yaml:"启用"`
-	Name          string `yaml:"name"`
-	Seat          string `yaml:"seat"`
-	RunAtHour     int    `yaml:"run_at_hour"`     // The hour the script should start trying to book (e.g., 20 for 8 PM)
-	BookStartHour int    `yaml:"book_start_hour"` // The actual start hour of the seat booking (e.g., 7 for 7 AM)
-	Duration      int    `yaml:"duration"`
+	Enable        bool     `yaml:"启用"`
+	RunAtHour     int      `yaml:"run_at_hour"`
+	Name          string   `yaml:"name"`
+	Seats         []string `yaml:"seats"`
+	BookStartHour int      `yaml:"book_start_hour"`
+	Duration      int      `yaml:"duration"`
 }
 
 func LoadSeatConfig(path string) (*SeatConfig, error) {
