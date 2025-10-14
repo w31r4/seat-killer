@@ -18,11 +18,20 @@ const (
 
 // BookResponseData matches the structure of the booking response.
 type BookResponseData struct {
-	CODE    string `json:"CODE"`
-	MESSAGE string `json:"MESSAGE"`
+	CODE    interface{} `json:"CODE"`
+	MESSAGE string      `json:"MESSAGE"`
 	DATA    struct {
 		BookingID string `json:"bookingId"`
 	} `json:"DATA"`
+}
+
+// IsSuccess checks if the booking response indicates success.
+// It handles cases where CODE might be a string ("ok") or other types.
+func (r *BookResponseData) IsSuccess() bool {
+	if codeStr, ok := r.CODE.(string); ok {
+		return codeStr == "ok"
+	}
+	return false
 }
 
 // getApiToken generates the required api-token header value.
