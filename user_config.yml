@@ -6,23 +6,26 @@ global:
 week_config:
   周一: # 预约目标：周三
     启用: true
-    run_at_hour: 20           # 脚本在周一晚上 20:00 (8 PM) 左右运行
-    name: "宋韵云图（四楼）"     # 目标房间名称
-    seats: ["35", "36", "37"] # 座位优先级: 35 (最高) > 36 (次高) > 37 (保底)
-    book_start_hour: 7        # 预约周三早上 7 点的座位
-    duration: 15              # 持续 15 小时
-
-  周二: # 预约目标：周四
-    启用: true
     run_at_hour: 20
+    run_at_minute: 0
     name: "宋韵云图（四楼）"
     seats: ["35", "36", "37"]
     book_start_hour: 7
     duration: 15
 
+  周二: # 预约目标：周四
+    启用: false
+    run_at_hour: 20
+    run_at_minute: 0
+    name: "未指定"
+    seats: ["1"]
+    book_start_hour: 8
+    duration: 4
+
   周三: # 预约目标：周五
     启用: false
     run_at_hour: 20
+    run_at_minute: 0
     name: "未指定"
     seats: ["1"]
     book_start_hour: 8
@@ -31,6 +34,7 @@ week_config:
   周四: # 预约目标：周六
     启用: false
     run_at_hour: 20
+    run_at_minute: 0
     name: "未指定"
     seats: ["1"]
     book_start_hour: 8
@@ -39,6 +43,7 @@ week_config:
   周五: # 预约目标：周日
     启用: false
     run_at_hour: 20
+    run_at_minute: 0
     name: "未指定"
     seats: ["1"]
     book_start_hour: 8
@@ -47,6 +52,7 @@ week_config:
   周六: # 预约目标：下周一
     启用: false
     run_at_hour: 20
+    run_at_minute: 0
     name: "未指定"
     seats: ["1"]
     book_start_hour: 8
@@ -55,6 +61,7 @@ week_config:
   周日: # 预约目标：下周二
     启用: false
     run_at_hour: 20
+    run_at_minute: 0
     name: "未指定"
     seats: ["1"]
     book_start_hour: 8

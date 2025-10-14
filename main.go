@@ -55,12 +55,12 @@ func main() {
 		log.Printf("Booking is not enabled for today (%s) or no seats configured. Exiting.", todayWeekdayStr)
 		return
 	}
-	log.Printf("Found booking task for today (%s): Run at %d:00 to book one of %d seat(s).",
-		todayWeekdayStr, dayConfig.RunAtHour, len(dayConfig.Seats))
+	log.Printf("Found booking task for today (%s): Run at %d:%02d to book one of %d seat(s).",
+		todayWeekdayStr, dayConfig.RunAtHour, dayConfig.RunAtMinute, len(dayConfig.Seats))
 
 	// --- 4. Define Time Windows ---
 	now := time.Now()
-	officialBookTime := time.Date(now.Year(), now.Month(), now.Day(), dayConfig.RunAtHour, 0, 0, 0, time.Local)
+	officialBookTime := time.Date(now.Year(), now.Month(), now.Day(), dayConfig.RunAtHour, dayConfig.RunAtMinute, 0, 0, time.Local)
 	preemptTime := officialBookTime.Add(-time.Duration(seatCfg.Global.PreemptSeconds) * time.Second)
 	fallbackEndTime := officialBookTime.Add(fallbackWindow)
 

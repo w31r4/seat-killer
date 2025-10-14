@@ -43,6 +43,7 @@ type GlobalConfig struct {
 type DayConfig struct {
 	Enable        bool     `yaml:"启用"`
 	RunAtHour     int      `yaml:"run_at_hour"`
+	RunAtMinute   int      `yaml:"run_at_minute"` // Temporary for testing
 	Name          string   `yaml:"name"`
 	Seats         []string `yaml:"seats"`
 	BookStartHour int      `yaml:"book_start_hour"`
