@@ -41,7 +41,7 @@ jobs:
       - name: Prepare package
         run: |
           # Copy additional files to the build directory
-          cp user_config.yml README.md user_info.example.yml ./build/
+          cp user_config.yml README.md user_info.example.yml seat_report.txt ./build/
           # Determine the archive name and extension
           OS_ARCH="${{ matrix.goos }}_${{ matrix.goarch }}"
           ARCHIVE_NAME="seat-killer_${OS_ARCH}"
