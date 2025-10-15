@@ -1,0 +1,82 @@
+name: Release Go Project
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Package
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Define the build matrix for different OS and architectures
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.5'
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          # Determine the output name based on the OS
+          OUTPUT_NAME="./build/seat-killer"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          fi
+          # Build the Go application
+          mkdir -p ./build
+          go build -v -o $OUTPUT_NAME main.go
+      
+      - name: Prepare package
+        run: |
+          # Copy additional files to the build directory
+          cp user_config.yml README.md ./build/
+          # Determine the archive name and extension
+          OS_ARCH="${{ matrix.goos }}_${{ matrix.goarch }}"
+          ARCHIVE_NAME="seat-killer_${OS_ARCH}"
+          cd build
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -r "../${ARCHIVE_NAME}.zip" .
+          else
+            tar -czvf "../${ARCHIVE_NAME}.tar.gz" .
+          fi
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            *.zip
+            *.tar.gz
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create a release
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: ./release-assets
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
