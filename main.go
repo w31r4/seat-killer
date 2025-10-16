@@ -23,18 +23,22 @@ func main() {
 	log.Println("Starting Seat Killer...")
 
 	// --- 1. Load Configs & Map ---
+	//通过 user_info 加载当前用户信息结构体
 	userInfo, err := config.LoadUserInfo("user_info.yml")
 	if err != nil {
 		log.Fatalf("Failed to load user_info.yml: %v", err)
 	}
+	// 通过 user_config 读取抢座任务信息，并返回 go 语言可读取的结构体
 	seatCfg, err := config.LoadSeatConfig("user_config.yml")
 	if err != nil {
 		log.Fatalf("Failed to load user_config.yml: %v", err)
 	}
+
 	if _, err = mapper.LoadSeatMap("seat_report.txt"); err != nil {
 		log.Fatalf("Failed to load seat map: %v", err)
 	}
 	log.Println("Configs and seat map loaded.")
+	log.Printf("Loaded user config for SchoolID: %s", userInfo.SchoolID)
 
 	// --- 2. Validate Credentials ---
 	log.Println("Validating user credentials...")
@@ -49,7 +53,9 @@ func main() {
 		time.Wednesday: "周三", time.Thursday: "周四", time.Friday: "周五",
 		time.Saturday: "周六",
 	}
+	//通过调用时间函数返回值，匹配哈希表，得到今天是周几的中文
 	todayWeekdayStr := weekdayMap[time.Now().Weekday()]
+	//通过处理函数获取当前要请求的位置
 	dayConfig, ok := seatCfg.WeekConfig[todayWeekdayStr]
 	if !ok || !dayConfig.Enable || len(dayConfig.Seats) == 0 {
 		log.Printf("Booking is not enabled for today (%s) or no seats configured. Exiting.", todayWeekdayStr)
@@ -57,6 +63,15 @@ func main() {
 	}
 	log.Printf("Found booking task for today (%s): Run at %d:%02d to book one of %d seat(s).",
 		todayWeekdayStr, dayConfig.RunAtHour, dayConfig.RunAtMinute, len(dayConfig.Seats))
+
+	bookingDayForLog := time.Now().AddDate(0, 0, 2)
+	targetTime := time.Date(bookingDayForLog.Year(), bookingDayForLog.Month(), bookingDayForLog.Day(), dayConfig.BookStartHour, 0, 0, 0, time.Local)
+	log.Printf("Task for SchoolID [%s]: Booking for %s, from %s for %d hours. Seats: %v",
+		userInfo.SchoolID,
+		targetTime.Format("2006-01-02"),
+		targetTime.Format("15:04"),
+		dayConfig.Duration,
+		dayConfig.Seats)
 
 	// --- 4. Define Time Windows ---
 	now := time.Now()
@@ -86,15 +101,31 @@ func main() {
 	if err != nil {
 		log.Fatalf("User info fetch failed: %v", err)
 	}
-	log.Printf("Logged in as UID: %s. Starting high-frequency requests...", loggedInUser.UID)
+	log.Printf("Logged in as SchoolID [%s] (UID: %s). Starting high-frequency requests...", userInfo.SchoolID, loggedInUser.UID)
 
 	// --- 7. Execute Phased Booking ---
-	if executeBookingPhase(client, loggedInUser, &dayConfig, preemptTime, officialBookTime, true) {
-		log.Println("BOOKING SUCCESSFUL in Attack Phase!")
+	if success, seat := executeBookingPhase(client, userInfo, loggedInUser, &dayConfig, preemptTime, officialBookTime, true); success {
+		bookingDay := time.Now().AddDate(0, 0, 2)
+		bookTime := time.Date(bookingDay.Year(), bookingDay.Month(), bookingDay.Day(), dayConfig.BookStartHour, 0, 0, 0, time.Local)
+		log.Printf("BOOKING SUCCESSFUL for SchoolID [%s] in Attack Phase! Seat '%s' in room '%s' booked for %s from %s for %d hours.",
+			userInfo.SchoolID,
+			seat,
+			dayConfig.Name,
+			bookTime.Format("2006-01-02"),
+			bookTime.Format("15:04"),
+			dayConfig.Duration)
 		return
 	}
-	if executeBookingPhase(client, loggedInUser, &dayConfig, officialBookTime, fallbackEndTime, false) {
-		log.Println("BOOKING SUCCESSFUL in Fallback Phase!")
+	if success, seat := executeBookingPhase(client, userInfo, loggedInUser, &dayConfig, officialBookTime, fallbackEndTime, false); success {
+		bookingDay := time.Now().AddDate(0, 0, 2)
+		bookTime := time.Date(bookingDay.Year(), bookingDay.Month(), bookingDay.Day(), dayConfig.BookStartHour, 0, 0, 0, time.Local)
+		log.Printf("BOOKING SUCCESSFUL for SchoolID [%s] in Fallback Phase! Seat '%s' in room '%s' booked for %s from %s for %d hours.",
+			userInfo.SchoolID,
+			seat,
+			dayConfig.Name,
+			bookTime.Format("2006-01-02"),
+			bookTime.Format("15:04"),
+			dayConfig.Duration)
 		return
 	}
 
@@ -103,16 +134,16 @@ func main() {
 
 // executeBookingPhase runs the booking loop for a specific time window and seat strategy.
 // Returns true if booking was successful.
-func executeBookingPhase(client *http.Client, user *user.UserInfo, dayCfg *config.DayConfig, start, end time.Time, primaryOnly bool) bool {
+func executeBookingPhase(client *http.Client, cfgUser *config.UserInfo, loggedInUser *user.UserInfo, dayCfg *config.DayConfig, start, end time.Time, primaryOnly bool) (bool, string) {
 	ticker := time.NewTicker(requestInterval)
 	defer ticker.Stop()
 
 	seatsToTry := dayCfg.Seats
 	if primaryOnly {
 		seatsToTry = []string{dayCfg.Seats[0]}
-		log.Printf("--- Entering Attack Phase: Focusing on primary seat %s ---", seatsToTry[0])
+		log.Printf("--- Entering Attack Phase for SchoolID [%s]: Focusing on primary seat %s ---", cfgUser.SchoolID, seatsToTry[0])
 	} else {
-		log.Printf("--- Entering Fallback Phase: Trying all %d seats ---", len(seatsToTry))
+		log.Printf("--- Entering Fallback Phase for SchoolID [%s]: Trying all %d seats ---", cfgUser.SchoolID, len(seatsToTry))
 	}
 
 	bookingDay := time.Now().AddDate(0, 0, 2)
@@ -122,7 +153,7 @@ func executeBookingPhase(client *http.Client, user *user.UserInfo, dayCfg *confi
 			continue
 		}
 		if t.After(end) {
-			return false
+			return false, ""
 		}
 
 		for _, seatNum := range seatsToTry {
@@ -135,18 +166,18 @@ func executeBookingPhase(client *http.Client, user *user.UserInfo, dayCfg *confi
 			bookTime := time.Date(bookingDay.Year(), bookingDay.Month(), bookingDay.Day(), dayCfg.BookStartHour, 0, 0, 0, time.Local)
 			duration := time.Duration(dayCfg.Duration) * time.Hour
 
-			log.Printf("Attempting to book room '%s', seat '%s' (%d)", dayCfg.Name, seatNum, seatID)
-			result, err := booker.BookSeat(client, user.UID, seatID, bookTime, duration)
+			log.Printf("Attempting to book for SchoolID [%s]: room '%s', seat '%s' (%d)", cfgUser.SchoolID, dayCfg.Name, seatNum, seatID)
+			result, err := booker.BookSeat(client, loggedInUser.UID, seatID, bookTime, duration)
 			if err != nil {
-				log.Printf("Booking attempt failed: %v", err)
+				log.Printf("Booking attempt failed for SchoolID [%s]: %v", cfgUser.SchoolID, err)
 				continue
 			}
 
-			log.Printf("Booking result: [%v] %s", result.CODE, result.MESSAGE)
+			log.Printf("Booking result for SchoolID [%s]: [%v] %s", cfgUser.SchoolID, result.CODE, result.MESSAGE)
 			if result.IsSuccess() {
-				return true
+				return true, seatNum
 			}
 		}
 	}
-	return false // Should not be reached if end time is handled correctly
+	return false, "" // Should not be reached if end time is handled correctly
 }

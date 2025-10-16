@@ -3,7 +3,7 @@ name: Release Go Project
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build:
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.5'
+          go-version: "1.24.5"
 
       - name: Build
         env:
@@ -37,7 +37,7 @@ jobs:
           # Build the Go application
           mkdir -p ./build
           go build -v -o $OUTPUT_NAME main.go
-      
+
       - name: Prepare package
         run: |
           # Copy additional files to the build directory

@@ -19,6 +19,7 @@ type SeatMapper map[string][]SeatInfo
 var seatMap SeatMapper
 
 func LoadSeatMap(path string) (SeatMapper, error) {
+	//打开座位文件
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open seat map file: %w", err)
@@ -27,6 +28,7 @@ func LoadSeatMap(path string) (SeatMapper, error) {
 
 	mapper := make(SeatMapper)
 	var currentRoom string
+	//创建匹配器，用于正则匹配
 	roomRegex := regexp.MustCompile(`^# Room: (.+)$`)
 	seatRegex := regexp.MustCompile(`^SeatID: (\d+), Title: (.+)$`)
 
