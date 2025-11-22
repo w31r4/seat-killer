@@ -180,9 +180,16 @@ func executeBookingPhase(client *http.Client, cfgUser *config.UserInfo, loggedIn
 
 			log.Printf("Attempting to book for SchoolID [%s]: room '%s', seat '%s' (%d)", cfgUser.SchoolID, dayCfg.Name, seatNum, seatID)
 			var result *booker.BookResponseData
+			bookReq := &booker.BookingRequest{
+				Client:    client,
+				UserID:    loggedInUser.UID,
+				SeatID:    seatID,
+				BeginTime: bookTime,
+				Duration:  duration,
+			}
 			bookFunc := func() error {
 				var bookErr error
-				result, bookErr = booker.BookSeat(client, loggedInUser.UID, seatID, bookTime, duration)
+				result, bookErr = booker.BookSeat(bookReq)
 				// If there's a booking error but the response indicates a non-retryable server message, wrap it.
 				if bookErr == nil && !result.IsSuccess() && result.MESSAGE != "" {
 					// Let's consider messages like "request too frequent" or "seat taken" as unretryable for the *immediate* retry.

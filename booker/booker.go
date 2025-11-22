@@ -34,6 +34,15 @@ func (r *BookResponseData) IsSuccess() bool {
 	return false
 }
 
+// BookingRequest encapsulates all parameters needed for a seat booking attempt.
+type BookingRequest struct {
+	Client    *http.Client
+	UserID    string
+	SeatID    int
+	BeginTime time.Time
+	Duration  time.Duration
+}
+
 // getApiToken generates the required api-token header value.
 // Based on reverse-engineering of the library's web page, it's an MD5 hash.
 func getApiToken(apiTime string) string {
@@ -41,34 +50,34 @@ func getApiToken(apiTime string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// BookSeat attempts to book a specific seat.
-func BookSeat(client *http.Client, userID string, seatID int, beginTime time.Time, duration time.Duration) (*BookResponseData, error) {
+// BookSeat attempts to book a specific seat using the parameters from the request DTO.
+func BookSeat(req *BookingRequest) (*BookResponseData, error) {
 	// The python script calculates beginTime from the beginning of the current day.
 	// The curl command uses a direct timestamp. Let's follow the curl command.
-	beginTimestamp := beginTime.Unix()
+	beginTimestamp := req.BeginTime.Unix()
 	apiTimestamp := time.Now().Unix()
 
 	formData := url.Values{}
 	formData.Set("beginTime", strconv.FormatInt(beginTimestamp, 10))
-	formData.Set("duration", fmt.Sprintf("%.0f", duration.Seconds()))
-	formData.Set("seats[0]", strconv.Itoa(seatID))
-	formData.Set("seatBookers[0]", userID)
+	formData.Set("duration", fmt.Sprintf("%.0f", req.Duration.Seconds()))
+	formData.Set("seats[0]", strconv.Itoa(req.SeatID))
+	formData.Set("seatBookers[0]", req.UserID)
 	formData.Set("is_recommend", "1")
 	formData.Set("api_time", strconv.FormatInt(apiTimestamp, 10))
 
-	req, err := http.NewRequest("POST", bookURL, strings.NewReader(formData.Encode()))
+	httpReq, err := http.NewRequest("POST", bookURL, strings.NewReader(formData.Encode()))
 	if err != nil {
 		return nil, err
 	}
 
 	// Set headers based on the curl command
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("api-token", getApiToken(strconv.FormatInt(apiTimestamp, 10)))
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0")
-	req.Header.Set("Referer", "https://hdu.huitu.zhishulib.com/")
+	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
+	httpReq.Header.Set("Accept", "application/json, text/plain, */*")
+	httpReq.Header.Set("api-token", getApiToken(strconv.FormatInt(apiTimestamp, 10)))
+	httpReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0")
+	httpReq.Header.Set("Referer", "https://hdu.huitu.zhishulib.com/")
 
-	resp, err := client.Do(req)
+	resp, err := req.Client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}

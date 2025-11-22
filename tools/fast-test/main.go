@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"net/http"
 	"seat-killer/booker"
 	"seat-killer/config"
+	"seat-killer/mapper"
 	"seat-killer/sso"
 	"seat-killer/user"
 	"time"
@@ -13,52 +14,92 @@ import (
 func main() {
 	log.Println("--- Starting Fast-Test ---")
 
-	// 1. Load User Info
-	log.Println("Loading user credentials from user_info.yml...")
+	// 1. Load All Configs
+	log.Println("Loading configurations...")
 	userInfo, err := config.LoadUserInfo("user_info.yml")
 	if err != nil {
 		log.Fatalf("Failed to load user_info.yml: %v", err)
 	}
-	log.Printf("Loaded credentials for SchoolID: %s", userInfo.SchoolID)
 
-	// 2. Test Login
+	seatCfg, err := config.LoadSeatConfig("user_config.yml")
+	if err != nil {
+		log.Fatalf("Failed to load user_config.yml: %v", err)
+	}
+
+	if _, err = mapper.LoadSeatMap("seat_report.txt"); err != nil {
+		log.Fatalf("Failed to load seat_map.txt: %v", err)
+	}
+	log.Println("All configurations loaded successfully.")
+
+	// 2. Login
 	log.Println("\n--- Testing Login ---")
-	log.Println("Attempting to log in...")
-	client, _, err := sso.Login(userInfo.SchoolID, userInfo.Password)
-	if err != nil {
-		log.Fatalf("Login test failed: %v", err)
-	}
-	log.Println("Login successful!")
-
-	loggedInUser, err := user.GetUserInfo(client)
-	if err != nil {
-		log.Fatalf("Failed to fetch user info after login: %v", err)
-	}
-	log.Printf("Successfully fetched user info for UID: %s", loggedInUser.UID)
-
-	// 3. Test Booking an Invalid Seat
-	log.Println("\n--- Testing Booking API with Invalid Seat ---")
-	invalidSeatID := 0 // Using 0 as it's an invalid seat ID
-	log.Printf("Attempting to book an invalid seat (ID: %d) to check API response...", invalidSeatID)
-
-	// Use a fixed future time for testing
-	bookTime := time.Now().Add(48 * time.Hour)
-	duration := 1 * time.Hour
-
-	result, err := booker.BookSeat(client, loggedInUser.UID, invalidSeatID, bookTime, duration)
-	if err != nil {
-		log.Printf("Booking request failed with an error: %v", err)
-		log.Println("This might be expected if the API gateway rejects the request before it hits the booking logic.")
+	var client *http.Client
+	var loggedInUser *user.UserInfo
+	loginFunc := func() (err error) {
+		client, _, err = sso.Login(userInfo.SchoolID, userInfo.Password)
+		if err != nil {
+			return
+		}
+		loggedInUser, err = user.GetUserInfo(client)
+		return
 	}
 
-	if result != nil {
-		log.Println("Received a response from the booking API:")
-		log.Printf("  CODE: %v (Type: %T)", result.CODE, result.CODE)
-		log.Printf("  MESSAGE: %s", result.MESSAGE)
-		log.Printf("  IsSuccess(): %t", result.IsSuccess())
+	if err := loginFunc(); err != nil {
+		log.Fatalf("Login or user info fetch failed: %v", err)
+	}
+	log.Printf("Login successful! Fetched user info for UID: %s", loggedInUser.UID)
+
+	// 3. Find First Enabled Task and Test Booking
+	log.Println("\n--- Finding Task and Testing Booking ---")
+	var taskFound bool
+	for day, dayConfig := range seatCfg.WeekConfig {
+		if dayConfig.Enable && len(dayConfig.Seats) > 0 {
+			log.Printf("Found enabled task for '%s'. Preparing to test with the first seat.", day)
+			taskFound = true
+
+			seatNum := dayConfig.Seats[0]
+			seatID, err := mapper.GetSeatID(dayConfig.Name, seatNum)
+			if err != nil {
+				log.Printf("Could not find seat ID for room '%s', seat '%s'. Skipping.", dayConfig.Name, seatNum)
+				continue
+			}
+
+			// Use a fixed future time for testing, e.g., two days from now, at the configured start hour.
+			bookTime := time.Date(
+				time.Now().Year(), time.Now().Month(), time.Now().Day()+2,
+				dayConfig.BookStartHour, 0, 0, 0, time.Local,
+			)
+			duration := time.Duration(dayConfig.Duration) * time.Hour
+
+			log.Printf("Attempting to book seat: Room='%s', Seat='%s' (%d), Time='%s', Duration='%d hours'",
+				dayConfig.Name, seatNum, seatID, bookTime.Format("2006-01-02 15:04"), dayConfig.Duration)
+
+			bookReq := &booker.BookingRequest{
+				Client:    client,
+				UserID:    loggedInUser.UID,
+				SeatID:    seatID,
+				BeginTime: bookTime,
+				Duration:  duration,
+			}
+
+			result, err := booker.BookSeat(bookReq)
+			if err != nil {
+				log.Printf("Booking request failed with an error: %v", err)
+			}
+
+			if result != nil {
+				log.Println("Received a response from the booking API:")
+				log.Printf("  CODE: %v", result.CODE)
+				log.Printf("  MESSAGE: %s", result.MESSAGE)
+				log.Printf("  IsSuccess(): %t", result.IsSuccess())
+			}
+			break // Test only the first found task
+		}
+	}
+
+	if !taskFound {
+		log.Println("No enabled booking tasks found in user_config.yml. Test cannot proceed.")
 	}
 
 	log.Println("\n--- Fast-Test Finished ---")
-	fmt.Println("\nTip: If login fails, check your credentials in user_info.yml.")
-	fmt.Println("The booking test helps understand how the server responds to invalid requests. A non-nil response is a good sign of successful communication.")
 }
