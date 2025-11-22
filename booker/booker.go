@@ -34,15 +34,6 @@ func (r *BookResponseData) IsSuccess() bool {
 	return false
 }
 
-// BookingRequest encapsulates all parameters needed for a seat booking attempt.
-type BookingRequest struct {
-	Client    *http.Client
-	UserID    string
-	SeatID    int
-	BeginTime time.Time
-	Duration  time.Duration
-}
-
 // getApiToken generates the required api-token header value.
 // Based on reverse-engineering of the library's web page, it's an MD5 hash.
 func getApiToken(apiTime string) string {
