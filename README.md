@@ -94,3 +94,38 @@ go run .
     55 19 * * * cd /path/to/your/seat-killer && ./seat-killer >> /path/to/your/seat-killer/cron.log 2>&1
     ```
     这条命令会让系统在每天 19:55 自动为你启动抢座程序，并将所有日志记录到 `cron.log` 文件中。
+
+
+### 快速测试工具 (`fast-test`)
+
+项目包含一个快速测试工具，用于在不运行完整抢座逻辑的情况下，快速验证您的凭据和与图书馆预定系统的连通性。
+
+#### 功能
+
+1.  **凭据验证**: 尝试使用 `user_info.yml` 中的学号和密码登录，验证它们是否正确。
+2.  **API连通性测试**: 登录成功后，尝试预定一个无效的座位（ID为0）。这有助于检查API接口是否可达，并观察服务器对错误请求的响应。
+
+#### 如何运行
+
+1.  **编译**: 打开终端，进入 `tools/fast-test` 目录，然后运行以下命令编译工具。
+
+    ```bash
+    cd tools/fast-test
+    go build
+    ```
+
+2.  **运行**: 在 `tools/fast-test` 目录下执行生成的文件。
+
+    ```bash
+    ./fast-test
+    ```
+    或者在项目根目录运行
+    ```bash
+    go run ./tools/fast-test
+    ```
+
+#### 解读输出
+
+- **Login successful!**: 表示您的学号和密码正确无误。
+- **Login test failed**: 登录失败。请检查 `user_info.yml` 中的凭据，或者确认学校SSO服务是否正常。
+- **Received a response from the booking API**: 这是预期的结果。工具会打印出服务器返回的 `CODE` 和 `MESSAGE`，帮助您了解当前API的状态。如果这里出现网络错误，则表示您的设备与图书馆服务器之间的网络连接存在问题。

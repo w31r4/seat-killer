@@ -6,6 +6,8 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 
+	"seat-killer/retry"
+
 	"github.com/hduLib/hdu/client"
 	"github.com/hduLib/hdu/sso"
 )
@@ -41,7 +43,8 @@ func Login(user, passwd string) (*http.Client, string, error) {
 	}
 
 	if phpSessID == "" {
-		return nil, "", errors.New("PHPSESSID not found after login")
+		// This is a critical failure, likely due to incorrect credentials. Mark as unretryable.
+		return nil, "", retry.WrapUnretryable(errors.New("PHPSESSID not found after login, please check your credentials"))
 	}
 
 	// Return the client (which has the jar) and the specific PHPSESSID.

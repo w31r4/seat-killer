@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"seat-killer/booker"
 	"seat-killer/config"
 	"seat-killer/mapper"
+	"seat-killer/retry"
 	"seat-killer/sso"
 	"seat-killer/user"
 )
@@ -42,8 +44,11 @@ func main() {
 
 	// --- 2. Validate Credentials ---
 	log.Println("Validating user credentials...")
-	if err := sso.ValidateCredentials(userInfo.SchoolID, userInfo.Password); err != nil {
-		log.Fatalf("Credential validation failed: %v. Please check your user_info.yml.", err)
+	validationFunc := func() error {
+		return sso.ValidateCredentials(userInfo.SchoolID, userInfo.Password)
+	}
+	if err := retry.WithRetry(validationFunc, 3, 2*time.Second); err != nil {
+		log.Fatalf("Credential validation failed after multiple retries: %v. Please check your user_info.yml.", err)
 	}
 	log.Println("User credentials are valid.")
 
@@ -93,9 +98,16 @@ func main() {
 
 	// --- 6. Login and Prepare ---
 	log.Println("Booking window opened. Logging in...")
-	client, _, err := sso.Login(userInfo.SchoolID, userInfo.Password)
-	if err != nil {
-		log.Fatalf("Login failed: %v", err)
+	var client *http.Client
+	loginFunc := func() error {
+		var loginErr error
+		client, _, loginErr = sso.Login(userInfo.SchoolID, userInfo.Password)
+		return loginErr
+	}
+	// Retry login for up to a minute to handle temporary service unavailability.
+	// 20 attempts with a 3-second delay gives a ~1 minute window.
+	if err := retry.WithRetry(loginFunc, 20, 3*time.Second); err != nil {
+		log.Fatalf("Login failed after persistent retries for ~1 minute: %v", err)
 	}
 	loggedInUser, err := user.GetUserInfo(client)
 	if err != nil {
@@ -167,9 +179,22 @@ func executeBookingPhase(client *http.Client, cfgUser *config.UserInfo, loggedIn
 			duration := time.Duration(dayCfg.Duration) * time.Hour
 
 			log.Printf("Attempting to book for SchoolID [%s]: room '%s', seat '%s' (%d)", cfgUser.SchoolID, dayCfg.Name, seatNum, seatID)
-			result, err := booker.BookSeat(client, loggedInUser.UID, seatID, bookTime, duration)
-			if err != nil {
-				log.Printf("Booking attempt failed for SchoolID [%s]: %v", cfgUser.SchoolID, err)
+			var result *booker.BookResponseData
+			bookFunc := func() error {
+				var bookErr error
+				result, bookErr = booker.BookSeat(client, loggedInUser.UID, seatID, bookTime, duration)
+				// If there's a booking error but the response indicates a non-retryable server message, wrap it.
+				if bookErr == nil && !result.IsSuccess() && result.MESSAGE != "" {
+					// Let's consider messages like "request too frequent" or "seat taken" as unretryable for the *immediate* retry.
+					// The outer ticker loop will handle the next attempt after the interval.
+					return retry.WrapUnretryable(fmt.Errorf("booking failed with server message: [%v] %s", result.CODE, result.MESSAGE))
+				}
+				return bookErr
+			}
+
+			if err := retry.WithRetry(bookFunc, 2, 100*time.Millisecond); err != nil {
+				// Log the final error after retries, but don't stop the whole process.
+				log.Printf("Booking attempt for seat %d failed after retries: %v", seatID, err)
 				continue
 			}
 
