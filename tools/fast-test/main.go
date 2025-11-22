@@ -1,13 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"net/http"
+	"os"
+	"path/filepath"
 	"seat-killer/booker"
 	"seat-killer/config"
 	"seat-killer/mapper"
 	"seat-killer/sso"
 	"seat-killer/user"
+	"strconv"
 	"time"
 )
 
@@ -15,91 +18,144 @@ func main() {
 	log.Println("--- Starting Fast-Test ---")
 
 	// 1. Load All Configs
-	log.Println("Loading configurations...")
-	userInfo, err := config.LoadUserInfo("user_info.yml")
+	userInfoPath := resolveFastTestPath("user_info.yml")
+	seatCfgPath := resolveFastTestPath("user_config.yml")
+	seatMapPath := resolveSeatReportPath()
+
+	log.Printf("Loading user info from %s ...", userInfoPath)
+	userInfo, err := config.LoadUserInfo(userInfoPath)
 	if err != nil {
-		log.Fatalf("Failed to load user_info.yml: %v", err)
+		log.Fatalf("Failed to load %s: %v", userInfoPath, err)
 	}
 
-	seatCfg, err := config.LoadSeatConfig("user_config.yml")
+	log.Printf("Loading seat config from %s ...", seatCfgPath)
+	seatCfg, err := config.LoadSeatConfig(seatCfgPath)
 	if err != nil {
-		log.Fatalf("Failed to load user_config.yml: %v", err)
+		log.Fatalf("Failed to load %s: %v", seatCfgPath, err)
 	}
 
-	if _, err = mapper.LoadSeatMap("seat_report.txt"); err != nil {
-		log.Fatalf("Failed to load seat_map.txt: %v", err)
+	log.Printf("Loading seat map from %s ...", seatMapPath)
+	if _, err = mapper.LoadSeatMap(seatMapPath); err != nil {
+		log.Fatalf("Failed to load %s: %v", seatMapPath, err)
 	}
 	log.Println("All configurations loaded successfully.")
 
 	// 2. Login
 	log.Println("\n--- Testing Login ---")
-	var client *http.Client
-	var loggedInUser *user.UserInfo
-	loginFunc := func() (err error) {
-		client, _, err = sso.Login(userInfo.SchoolID, userInfo.Password)
-		if err != nil {
-			return
+	client, _, err := sso.Login(userInfo.SchoolID, userInfo.Password)
+	if err != nil {
+		log.Fatalf("Login test failed: %v", err)
+	}
+	log.Println("Login successful!")
+
+	loggedInUser, err := user.GetUserInfo(client)
+	if err != nil {
+		log.Fatalf("Failed to fetch user info after login: %v", err)
+	}
+	log.Printf("Successfully fetched user info for UID: %s", loggedInUser.UID)
+
+	// 3. Test Booking with an Invalid Seat from the dedicated test task
+	log.Println("\n--- Testing Booking API with Invalid Seat ---")
+	task, ok := seatCfg.WeekConfig["fast_test_task"]
+	if !ok || !task.Enable || len(task.Seats) == 0 {
+		log.Fatalf("The dedicated 'fast_test_task' is not configured correctly in user_config.yml.")
+	}
+
+	seatNum := task.Seats[0]
+	log.Printf("Attempting to use an intentionally invalid seat: Room='%s', Seat='%s'", task.Name, seatNum)
+
+	seatID, err := mapper.GetSeatID(task.Name, seatNum)
+	if err != nil {
+		log.Printf("As expected, seat '%s' in room '%s' is not in the local map: %v", seatNum, task.Name, err)
+		if fakeID, parseErr := strconv.Atoi(seatNum); parseErr == nil {
+			seatID = fakeID
+		} else {
+			seatID = 0 // fall back to an obviously invalid seat ID
 		}
-		loggedInUser, err = user.GetUserInfo(client)
-		return
+		log.Printf("Will send the request with a dummy seat ID (%d) to exercise the API.", seatID)
+	} else {
+		seatID += 1_000_000 // offset to avoid touching a real seat if it unexpectedly exists
+		log.Printf("Seat unexpectedly exists locally (ID=%d). Offset to %d to keep the request invalid.", seatID-1_000_000, seatID)
 	}
 
-	if err := loginFunc(); err != nil {
-		log.Fatalf("Login or user info fetch failed: %v", err)
+	bookTime := calculateBeginTime(time.Now())
+	duration := time.Hour
+
+	bookReq := &booker.BookingRequest{
+		Client:    client,
+		UserID:    loggedInUser.UID,
+		SeatID:    seatID,
+		BeginTime: bookTime,
+		Duration:  duration,
 	}
-	log.Printf("Login successful! Fetched user info for UID: %s", loggedInUser.UID)
 
-	// 3. Find First Enabled Task and Test Booking
-	log.Println("\n--- Finding Task and Testing Booking ---")
-	var taskFound bool
-	for day, dayConfig := range seatCfg.WeekConfig {
-		if dayConfig.Enable && len(dayConfig.Seats) > 0 {
-			log.Printf("Found enabled task for '%s'. Preparing to test with the first seat.", day)
-			taskFound = true
+	result, err := booker.BookSeat(bookReq)
+	if err != nil {
+		log.Printf("Booking request failed with an error: %v", err)
+	}
 
-			seatNum := dayConfig.Seats[0]
-			seatID, err := mapper.GetSeatID(dayConfig.Name, seatNum)
-			if err != nil {
-				log.Printf("Could not find seat ID for room '%s', seat '%s'. Skipping.", dayConfig.Name, seatNum)
-				continue
-			}
-
-			// Use a fixed future time for testing, e.g., two days from now, at the configured start hour.
-			bookTime := time.Date(
-				time.Now().Year(), time.Now().Month(), time.Now().Day()+2,
-				dayConfig.BookStartHour, 0, 0, 0, time.Local,
-			)
-			duration := time.Duration(dayConfig.Duration) * time.Hour
-
-			log.Printf("Attempting to book seat: Room='%s', Seat='%s' (%d), Time='%s', Duration='%d hours'",
-				dayConfig.Name, seatNum, seatID, bookTime.Format("2006-01-02 15:04"), dayConfig.Duration)
-
-			bookReq := &booker.BookingRequest{
-				Client:    client,
-				UserID:    loggedInUser.UID,
-				SeatID:    seatID,
-				BeginTime: bookTime,
-				Duration:  duration,
-			}
-
-			result, err := booker.BookSeat(bookReq)
-			if err != nil {
-				log.Printf("Booking request failed with an error: %v", err)
-			}
-
-			if result != nil {
-				log.Println("Received a response from the booking API:")
-				log.Printf("  CODE: %v", result.CODE)
-				log.Printf("  MESSAGE: %s", result.MESSAGE)
-				log.Printf("  IsSuccess(): %t", result.IsSuccess())
-			}
-			break // Test only the first found task
+	if result != nil {
+		log.Printf("Booking API responded for begin time %s (duration %s):", bookTime.Format("2006-01-02 15:04:05"), duration)
+		log.Printf("  CODE: %v", result.CODE)
+		log.Printf("  MESSAGE: %s", result.MESSAGE)
+		log.Printf("  IsSuccess(): %t", result.IsSuccess())
+		if !result.IsSuccess() {
+			log.Println("SUCCESS: The API correctly rejected the request for the invalid seat.")
 		}
-	}
-
-	if !taskFound {
-		log.Println("No enabled booking tasks found in user_config.yml. Test cannot proceed.")
 	}
 
 	log.Println("\n--- Fast-Test Finished ---")
+	fmt.Println("\nTip: A successful test means the program correctly identifies the invalid seat locally or the API rejects it.")
+}
+
+// calculateBeginTime picks a quick test start time:
+// - If now is within 08:00-22:00, use now+1h (but never past 22:00).
+// - Otherwise, use 08:00 of the next day.
+func calculateBeginTime(now time.Time) time.Time {
+	startWindow := time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, now.Location())
+	endWindow := time.Date(now.Year(), now.Month(), now.Day(), 22, 0, 0, 0, now.Location())
+
+	if !now.Before(startWindow) && now.Before(endWindow) {
+		candidate := now.Add(time.Hour)
+		if candidate.After(endWindow) {
+			return startWindow.Add(24 * time.Hour)
+		}
+		return candidate
+	}
+
+	return startWindow.Add(24 * time.Hour)
+}
+
+// resolveFastTestPath prefers files under tools/fast-test, but gracefully
+// falls back to the current directory. This makes the tool runnable from
+// either repo root or the fast-test folder.
+func resolveFastTestPath(fileName string) string {
+	candidates := []string{
+		filepath.Join("tools", "fast-test", fileName),
+		fileName,
+		filepath.Join("..", fileName),
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return fileName
+}
+
+// resolveSeatReportPath locates seat_report.txt relative to common launch points.
+func resolveSeatReportPath() string {
+	candidates := []string{
+		"seat_report.txt",
+		filepath.Join("..", "seat_report.txt"),
+		filepath.Join("tools", "fast-test", "seat_report.txt"), // unlikely, but checked for completeness
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return "seat_report.txt"
 }
