@@ -65,7 +65,7 @@ func BookSeat(client *http.Client, userID string, seatID int, beginTime time.Tim
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("api-token", getApiToken(strconv.FormatInt(apiTimestamp, 10)))
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0")
 	req.Header.Set("Referer", "https://hdu.huitu.zhishulib.com/")
 
 	resp, err := client.Do(req)
