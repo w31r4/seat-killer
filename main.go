@@ -168,7 +168,19 @@ func executeBookingPhase(client *http.Client, cfgUser *config.UserInfo, loggedIn
 			return false, ""
 		}
 
-		for _, seatNum := range seatsToTry {
+		// Calculate delay to spread requests evenly within the interval to avoid rate limiting
+		stepDelay := time.Duration(0)
+		if len(seatsToTry) > 1 {
+			// Use slightly less than the full interval to ensure we don't overrun the ticker too much
+			stepDelay = (requestInterval - 50*time.Millisecond) / time.Duration(len(seatsToTry))
+		}
+
+		for i, seatNum := range seatsToTry {
+			// Add delay between seats (but not before the first one in this batch)
+			if i > 0 && stepDelay > 0 {
+				time.Sleep(stepDelay)
+			}
+
 			seatID, err := mapper.GetSeatID(dayCfg.Name, seatNum)
 			if err != nil {
 				log.Printf("Cannot find seat '%s' in room '%s', skipping.", seatNum, dayCfg.Name)

@@ -32,59 +32,59 @@ week_config:
     run_at_minute: 0
     name: "宋韵云图（四楼）"
     seats: ["35", "36", "37"]
-    book_start_hour: 7
-    duration: 15
+    book_start_hour: 10
+    duration: 12
 
   周二: # 预约目标：周四
-    启用: false
+    启用: true
     run_at_hour: 20
     run_at_minute: 0
-    name: "未指定"
-    seats: ["1"]
-    book_start_hour: 8
-    duration: 4
+    name: "宋韵云图（四楼）"
+    seats: ["35", "36", "37"]
+    book_start_hour: 10
+    duration: 12
 
   周三: # 预约目标：周五
-    启用: false
+    启用: true
     run_at_hour: 20
     run_at_minute: 0
-    name: "未指定"
-    seats: ["1"]
-    book_start_hour: 8
-    duration: 4
+    name: "宋韵云图（四楼）"
+    seats: ["35", "36", "37"]
+    book_start_hour: 10
+    duration: 12
 
   周四: # 预约目标：周六
-    启用: false
+    启用: true
     run_at_hour: 20
     run_at_minute: 0
-    name: "未指定"
-    seats: ["1"]
-    book_start_hour: 8
-    duration: 4
+    name: "宋韵云图（四楼）"
+    seats: ["35", "36", "37"]
+    book_start_hour: 10
+    duration: 12
 
   周五: # 预约目标：周日
-    启用: false
+    启用: true
     run_at_hour: 20
     run_at_minute: 0
-    name: "未指定"
-    seats: ["1"]
-    book_start_hour: 8
-    duration: 4
+    name: "宋韵云图（四楼）"
+    seats: ["35", "36", "37"]
+    book_start_hour: 10
+    duration: 12
 
   周六: # 预约目标：下周一
-    启用: false
+    启用: true
     run_at_hour: 20
     run_at_minute: 0
-    name: "未指定"
-    seats: ["1"]
-    book_start_hour: 8
-    duration: 4
+    name: "宋韵云图（四楼）"
+    seats: ["35", "36", "37"]
+    book_start_hour: 10
+    duration: 12
 
   周日: # 预约目标：下周二
-    启用: false
+    启用: true
     run_at_hour: 20
     run_at_minute: 0
-    name: "未指定"
-    seats: ["1"]
-    book_start_hour: 8
-    duration: 4
+    name: "宋韵云图（四楼）"
+    seats: ["35", "36", "37"]
+    book_start_hour: 10
+    duration: 12

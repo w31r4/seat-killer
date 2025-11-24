@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -74,9 +75,23 @@ func BookSeat(req *BookingRequest) (*BookResponseData, error) {
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Check for HTML response (often indicates server error like 502/503/504 or WAF block)
+	if len(bodyBytes) > 0 && bodyBytes[0] == '<' {
+		preview := string(bodyBytes)
+		if len(preview) > 100 {
+			preview = preview[:100] + "..."
+		}
+		return nil, fmt.Errorf("server returned HTML (likely error page): %s", preview)
+	}
+
 	var bookData BookResponseData
-	if err := json.NewDecoder(resp.Body).Decode(&bookData); err != nil {
-		return nil, fmt.Errorf("failed to decode book response: %w", err)
+	if err := json.Unmarshal(bodyBytes, &bookData); err != nil {
+		return nil, fmt.Errorf("failed to decode book response: %w | Body: %s", err, string(bodyBytes))
 	}
 
 	return &bookData, nil
